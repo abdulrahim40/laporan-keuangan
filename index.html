@@ -59,21 +59,31 @@
   </div>
 
   <script>
-    // Integrasi Firebase Firestore
+    // Konfigurasi Firebase dari Anda
     const firebaseConfig = {
-apiKey: "AIzaSyB8zeqNDzTrqjWnzdr_652c6u8eVXxsCOM",
-  authDomain: "laporan-keuangan-01.firebaseapp.com",
-  projectId: "laporan-keuangan-01",
-  storageBucket: "laporan-keuangan-01.firebasestorage.app",
-  messagingSenderId: "880439127079",
-  appId: "1:880439127079:web:06cd16a0bc1c35a2c3b202"
+      apiKey: "AIzaSyB8zeqNDzTrqjWnzdr_652c6u8eVXxsCOM",
+      authDomain: "laporan-keuangan-01.firebaseapp.com",
+      projectId: "laporan-keuangan-01",
+      storageBucket: "laporan-keuangan-01.firebasestorage.app",
+      messagingSenderId: "880439127079",
+      appId: "1:880439127079:web:06cd16a0bc1c35a2c3b202"
     };
 
-    // Inisialisasi Firebase
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
+    let db;
     let transaksi = [];
     let saldo = 0;
+
+    // Inisialisasi Firebase
+    async function initFirebase() {
+      try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        await muatTransaksi();
+      } catch (error) {
+        alert('Gagal menginisialisasi Firebase: ' + error.message);
+        console.error(error);
+      }
+    }
 
     function formatRupiah(angka) {
       return angka.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' });
@@ -109,6 +119,11 @@ apiKey: "AIzaSyB8zeqNDzTrqjWnzdr_652c6u8eVXxsCOM",
     }
 
     async function tambahTransaksi() {
+      if (!db) {
+        alert('Firebase belum diinisialisasi. Coba muat ulang halaman.');
+        return;
+      }
+
       const tanggal = document.getElementById('tanggal').value;
       const uraian = document.getElementById('uraian').value;
       const kategori = document.getElementById('kategori').value;
@@ -127,6 +142,7 @@ apiKey: "AIzaSyB8zeqNDzTrqjWnzdr_652c6u8eVXxsCOM",
         alert('Transaksi berhasil disimpan!');
       } catch (error) {
         alert('Gagal menyimpan transaksi: ' + error.message);
+        console.error(error);
       }
 
       // Reset form
@@ -136,6 +152,11 @@ apiKey: "AIzaSyB8zeqNDzTrqjWnzdr_652c6u8eVXxsCOM",
     }
 
     async function hapusSemuaTransaksi() {
+      if (!db) {
+        alert('Firebase belum diinisialisasi. Coba muat ulang halaman.');
+        return;
+      }
+
       if (confirm('Apakah Anda yakin ingin menghapus semua transaksi?')) {
         try {
           const snapshot = await db.collection('transaksi').get();
@@ -149,12 +170,17 @@ apiKey: "AIzaSyB8zeqNDzTrqjWnzdr_652c6u8eVXxsCOM",
           alert('Semua transaksi dihapus!');
         } catch (error) {
           alert('Gagal menghapus transaksi: ' + error.message);
+          console.error(error);
         }
       }
     }
 
-    // Ambil data dari Firestore saat halaman dimuat
     async function muatTransaksi() {
+      if (!db) {
+        alert('Firebase belum diinisialisasi. Coba muat ulang halaman.');
+        return;
+      }
+
       try {
         const snapshot = await db.collection('transaksi').orderBy('tanggal').get();
         transaksi = [];
@@ -164,11 +190,12 @@ apiKey: "AIzaSyB8zeqNDzTrqjWnzdr_652c6u8eVXxsCOM",
         tampilkanTransaksi();
       } catch (error) {
         alert('Gagal memuat transaksi: ' + error.message);
+        console.error(error);
       }
     }
 
-    // Panggil muatTransaksi saat halaman dimuat
-    muatTransaksi();
+    // Inisialisasi Firebase saat halaman dimuat
+    initFirebase();
   </script>
 </body>
 </html>
