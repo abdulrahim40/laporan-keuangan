@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Laporan Keuangan</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Firebase SDK -->
+  <!-- Firebase SDK (opsional) -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js" onerror="console.error('Gagal memuat firebase-app.js')"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js" onerror="console.error('Gagal memuat firebase-firestore.js')"></script>
 </head>
@@ -37,6 +37,13 @@
         </div>
       </div>
       <button onclick="tambahTransaksi()" class="mt-4 w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">Tambah Transaksi</button>
+      <div class="mt-4 flex space-x-4">
+        <button onclick="exportTransaksi()" class="w-full bg-green-500 text-white p-2 rounded-md hover:bg-green-600">Export Transaksi</button>
+        <div class="w-full">
+          <input type="text" id="importUrl" class="w-full p-2 border rounded-md" placeholder="Masukkan URL JSON (contoh: raw.githubusercontent.com)">
+          <button onclick="importTransaksi()" class="mt-2 w-full bg-purple-500 text-white p-2 rounded-md hover:bg-purple-600">Import Transaksi</button>
+        </div>
+      </div>
     </div>
 
     <!-- Tabel Laporan -->
@@ -77,7 +84,7 @@
     // Fungsi untuk memeriksa pemuatan Firebase SDK
     function checkFirebaseLoaded() {
       return new Promise((resolve, reject) => {
-        const maxAttempts = 20; // Tingkatkan percobaan untuk koneksi lambat
+        const maxAttempts = 20;
         let attempts = 0;
         const interval = setInterval(() => {
           if (typeof firebase !== 'undefined' && firebase.app) {
@@ -85,7 +92,7 @@
             resolve();
           } else if (attempts >= maxAttempts) {
             clearInterval(interval);
-            reject(new Error('Gagal memuat Firebase SDK. Menggunakan localStorage sebagai cadangan.'));
+            reject(new Error('Gagal memuat Firebase SDK. Menggunakan localStorage sebagai penyimpanan utama.'));
           }
           attempts++;
         }, 500);
@@ -101,14 +108,14 @@
         isFirebaseInitialized = true;
         console.log('Firebase berhasil diinisialisasi pada ' + new Date().toLocaleString('id-ID'));
         await muatTransaksi();
-        // Sinkronkan localStorage ke Firebase jika ada data
         if (transaksi.length > 0) {
           await sinkronkanKeFirebase();
         }
       } catch (error) {
-        console.error('Error inisialisasi:', error);
-        alert('Gagal menginisialisasi Firebase: ' + error.message + '\nData akan disimpan di localStorage. Pastikan Anda terhubung ke internet untuk menggunakan Firebase.');
+        console.error('Error inisialisasi Firebase:', error);
+        alert('Gagal menginisialisasi Firebase: ' + error.message + '\nData akan disimpan di localStorage. Gunakan tombol Export/Import JSON untuk backup.');
         isFirebaseInitialized = false;
+        tampilkanTransaksi();
       }
     }
 
@@ -150,7 +157,7 @@
       try {
         const snapshot = await db.collection('transaksi').get();
         const batch = db.batch();
-        snapshot.forEach(doc => batch.delete(doc.ref)); // Hapus data lama di Firebase
+        snapshot.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
         for (const t of transaksi) {
           await db.collection('transaksi').add(t);
@@ -179,17 +186,16 @@
       if (isFirebaseInitialized && db) {
         try {
           await db.collection('transaksi').add(transaksiBaru);
-          alert('Transaksi berhasil disimpan ke Firebase!');
+          alert('Transaksi berhasil disimpan ke Firebase dan localStorage!');
         } catch (error) {
-          alert('Gagal menyimpan ke Firebase: ' + error.message + '\nData disimpan di localStorage.');
+          alert('Gagal menyimpan ke Firebase: ' + error.message + '\nData disimpan di localStorage. Gunakan tombol Export untuk backup.');
           console.error('Error menyimpan:', error);
         }
       } else {
-        alert('Transaksi disimpan di localStorage karena Firebase tidak tersedia.');
+        alert('Transaksi disimpan di localStorage. Firebase tidak tersedia. Gunakan tombol Export untuk backup.');
       }
 
       tampilkanTransaksi();
-      // Reset form
       document.getElementById('tanggal').value = '';
       document.getElementById('uraian').value = '';
       document.getElementById('jumlah').value = '';
@@ -212,7 +218,7 @@
             console.error('Error menghapus:', error);
           }
         } else {
-          alert('Semua transaksi dihapus dari localStorage karena Firebase tidak tersedia.');
+          alert('Semua transaksi dihapus dari localStorage. Firebase tidak tersedia.');
         }
 
         tampilkanTransaksi();
@@ -228,17 +234,51 @@
           localStorage.setItem('transaksi', JSON.stringify(transaksi));
           console.log('Data dimuat dari Firebase');
         } catch (error) {
-          alert('Gagal memuat transaksi dari Firebase: ' + error.message + '\nMenggunakan data dari localStorage.');
           console.error('Error memuat:', error);
         }
       }
       tampilkanTransaksi();
     }
 
-    // Tunggu hingga DOM dimuat, lalu inisialisasi Firebase
+    function exportTransaksi() {
+      const dataStr = JSON.stringify(transaksi, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'transaksi.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      alert('Transaksi diekspor ke transaksi.json. Unggah file ini ke GitHub untuk backup.');
+    }
+
+    async function importTransaksi() {
+      const url = document.getElementById('importUrl').value;
+      if (!url) {
+        alert('Masukkan URL JSON!');
+        return;
+      }
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Gagal mengambil file JSON');
+        const data = await response.json();
+        transaksi = Array.isArray(data) ? data : [];
+        localStorage.setItem('transaksi', JSON.stringify(transaksi));
+        if (isFirebaseInitialized && db) {
+          await sinkronkanKeFirebase();
+        }
+        tampilkanTransaksi();
+        alert('Transaksi berhasil diimpor!');
+      } catch (error) {
+        alert('Gagal mengimpor transaksi: ' + error.message);
+        console.error('Error impor:', error);
+      }
+    }
+
+    // Inisialisasi saat DOM dimuat
     document.addEventListener('DOMContentLoaded', () => {
       initFirebase();
-      tampilkanTransaksi(); // Tampilkan data lokal jika Firebase gagal
+      tampilkanTransaksi();
     });
   </script>
 </body>
